@@ -1,48 +1,38 @@
 'use strict';
 
-const net = require('net');
-const server = net.createServer();
-// const port = process.env.PORT;
+const io = require('socket.io')(3000);
 
-server.listen(3000, () => {
-  console.log('RAGHAD server up and running on 3000');
+io.on('connection', (socket) => {
+  console.log('connected to', socket.id);
 });
 
-let socketPool = {};
+const caps = io.of('/caps');
 
+caps.on('connection', (socket) => {
+  console.log('caps connected to', socket.id);
 
+  socket.on('join', (room) => {
+    console.log('registerd as', room);
+    socket.join(room);
+  });
 
-const doWork = (payload) => {
-  let parsed = JSON.parse(payload.toString());
+  socket.on('pickup', (payload) => {
+    logIt('pickup', payload);
+    caps.emit('pickup', payload);
+  });
 
-  if (parsed.event === 'pickup') {
-    console.log('pickup');
-    console.log('Time:', new Date());
-    console.log('Store:', parsed.order.storeName);
-    console.log('OrderID:', parsed.order.orderID);
-    console.log('Customer:', parsed.order.customerName);
-    console.log('Address:', parsed.order.address);
-  }
-
-  if (parsed.event === 'in-transit')
-    console.log(`in-transit order ${parsed.order.orderID}`);
-
-  if (parsed.event === 'delivered')
-    console.log(`delivered order ${parsed.order.orderID}`);
-
-  broadcast(parsed);
-
-};
-
-server.on('connection', (socket) => {
-  const id = `Socket-${Math.random()}`;
-  console.log(`client with ID : ${id} is connected!!! `);
-  socketPool[id] = socket;
-  socket.on('data', doWork);
+  socket.on('in-transit', (payload) => {
+    logIt('in-transit', payload);
+    caps.to(payload.store).emit('in-transit', payload);
+  });
+  
+  socket.on('delivered', (payload) => {
+    logIt('delivered', payload);
+    caps.to(payload.store).emit('delivered', payload);
+  });
 });
-function broadcast(msg) {
-  let payload = JSON.stringify(msg);
-  for (let socket in socketPool) {
-    socketPool[socket].write(payload);
-  }
+
+function logIt(event, payload){
+  let time = new Date();
+  console.log({time, event, payload});
 }
